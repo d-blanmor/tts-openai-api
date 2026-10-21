@@ -13,6 +13,51 @@ class VoiceBoxProvider(BaseTTSProvider):
     name = "voicebox"
     default_voice = None
 
+    async def list_voices(self) -> list[dict]:
+        headers = {}
+        if settings.VOICEBOX_API_KEY:
+            headers["Authorization"] = f"Bearer {settings.VOICEBOX_API_KEY}"
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(
+                f"{settings.VOICEBOX_BASE_URL.rstrip('/')}/profiles",
+                headers=headers,
+            )
+
+        if response.status_code >= 400:
+            raise RuntimeError(f"VoiceBox profile lookup failed: {response.text}")
+
+        profiles = response.json()
+        if not isinstance(profiles, list):
+            return []
+
+        normalized = []
+        for profile in profiles:
+            if not isinstance(profile, dict):
+                continue
+            normalized.append(
+                {
+                    "id": str(profile.get("id") or ""),
+                    "name": str(profile.get("name") or "Unknown voice"),
+                    "description": profile.get("description") or "",
+                    "language": profile.get("language") or "en",
+                    "avatar_path": profile.get("avatar_path"),
+                    "effects_chain": profile.get("effects_chain"),
+                    "voice_type": profile.get("voice_type") or "cloned",
+                    "preset_engine": profile.get("preset_engine"),
+                    "preset_voice_id": profile.get("preset_voice_id"),
+                    "design_prompt": profile.get("design_prompt"),
+                    "default_engine": profile.get("default_engine"),
+                    "personality": profile.get("personality"),
+                    "generation_count": profile.get("generation_count", 0),
+                    "sample_count": profile.get("sample_count", 0),
+                    "created_at": profile.get("created_at"),
+                    "updated_at": profile.get("updated_at"),
+                }
+            )
+
+        return normalized
+
     async def synthesize(
         self,
         text: str,

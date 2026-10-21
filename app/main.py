@@ -50,8 +50,27 @@ async def get_model(model: str) -> ModelInfo:
 
 
 @app.get("/v1/audio/voices")
-async def list_voices() -> list[str]:
-    return [settings.DEFAULT_PROVIDER]
+async def list_voices() -> dict:
+    provider = get_provider(settings.DEFAULT_PROVIDER)
+    if provider.name != "voicebox":
+        return {"voices": [], "default_voice": None}
+
+    profiles = await provider.list_voices()  # type: ignore[attr-defined-method]
+    default_voice = settings.VOICEBOX_DEFAULT_PROFILE_ID or (profiles[0]["id"] if profiles else None)
+
+    voices = []
+    for profile in profiles:
+        voice_id = profile.get("id")
+        voice = {
+            "id": voice_id,
+            "name": profile.get("name"),
+            "target_quality": profile.get("default_engine") or profile.get("voice_type") or "default",
+            "training_duration": profile.get("generation_count", 0),
+            "overall_grade": profile.get("sample_count", 0),
+        }
+        voices.append(voice)
+
+    return {"voices": voices, "default_voice": default_voice}
 
 
 @app.get("/v1/download/{filename}")
